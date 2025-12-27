@@ -35,6 +35,9 @@ enum Commands {
         /// number of parallel streams
         #[arg(short = 'P', long = "parallel", default_value_t = 1)]
         parallel: u16,
+        /// number of seconds to run for
+        #[arg(short = 't', long = "time", default_value_t = 10)]
+        duration: u16,
         /// send data from server to client instead of client to server
         #[arg(short = 'R', long = "reverse", default_value_t = false)]
         reverse: bool,
@@ -45,14 +48,18 @@ fn main() {
     let cli = Cli::parse();
     match cli.command {
         Commands::Server { host, port } => {
-            let host: IpAddr = host.parse().expect("invalid host");
+            let host: IpAddr = host.parse().expect("Invalid host");
             let config = server::ServerConfig { host, port };
-            server::run(config);
+            server::run(config).unwrap_or_else(|e| {
+                eprintln!("{}", e.message);
+            })
         },
-        Commands::Client { host, port, udp, parallel, reverse } => {
-            let host: IpAddr = host.parse().expect("invalid host");
-            let config = client::ClientConfig { host, port, udp, parallel, reverse };
-            client::run(config);
+        Commands::Client { host, port, udp, parallel, duration, reverse } => {
+            let host: IpAddr = host.parse().expect("Invalid host");
+            let config = client::ClientConfig { host, port, udp, parallel, duration, reverse };
+            client::run(config).unwrap_or_else(|e| {
+                eprintln!("{}", e.message);
+            })
         },
     }
 }
