@@ -1,7 +1,7 @@
 use std::io::{Read, Write};
 use std::net::{IpAddr, TcpStream};
-use std::thread;
 use std::sync::mpsc;
+use std::thread;
 
 use crate::error;
 use crate::netexp::{NetExp, NetExpParams, Side};
@@ -51,7 +51,9 @@ pub fn run(config: ClientConfig) -> error::Result<()> {
     if config.reverse {
         let (ready_tx, ready_rx) = mpsc::channel::<()>();
         let exp_thread = thread::spawn(move || {
-            net_exp.run(|| { ready_tx.send(()).unwrap(); })
+            net_exp.run(|| {
+                ready_tx.send(()).unwrap();
+            })
         });
         let Ok(_) = ready_rx.recv_timeout(std::time::Duration::new(5, 0)) else {
             return Err(error::Error::new("Timed out initializing test"));

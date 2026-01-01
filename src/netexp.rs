@@ -1,8 +1,8 @@
 mod tcp;
 mod udp;
 
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
-use bytes::{Bytes, BytesMut, Buf, BufMut};
 
 use crate::error;
 
@@ -29,42 +29,39 @@ pub enum Side {
 
 impl NetExp {
     pub fn run<F>(&self, ready_cb: F)
-        where F: FnOnce()
+    where
+        F: FnOnce(),
     {
         match self {
-            NetExp::Tcp(params) => {
-                match params.side {
-                    Side::Rx => {
-                        let rx = tcp::TcpRx::new(params.clone());
-                        let rx = rx.bind().unwrap();
-                        ready_cb();
-                        let rx = rx.accept().unwrap();
-                        rx.run().unwrap();
-                    },
-                    Side::Tx => {
-                        let tx = tcp::TcpTx::new(params.clone());
-                        let tx = tx.init().unwrap();
-                        ready_cb();
-                        tx.run().unwrap();
-                    },
+            NetExp::Tcp(params) => match params.side {
+                Side::Rx => {
+                    let rx = tcp::TcpRx::new(params.clone());
+                    let rx = rx.bind().unwrap();
+                    ready_cb();
+                    let rx = rx.accept().unwrap();
+                    rx.run().unwrap();
                 }
-            }
-            NetExp::Udp(params) => {
-                match params.side {
-                    Side::Rx => {
-                        let rx = udp::UdpRx::new(params.clone());
-                        let rx = rx.bind().unwrap();
-                        ready_cb();
-                        rx.run().unwrap();
-                    },
-                    Side::Tx => {
-                        let tx = udp::UdpTx::new(params.clone());
-                        let tx = tx.init().unwrap();
-                        ready_cb();
-                        tx.run().unwrap();
-                    },
+                Side::Tx => {
+                    let tx = tcp::TcpTx::new(params.clone());
+                    let tx = tx.init().unwrap();
+                    ready_cb();
+                    tx.run().unwrap();
                 }
-            }
+            },
+            NetExp::Udp(params) => match params.side {
+                Side::Rx => {
+                    let rx = udp::UdpRx::new(params.clone());
+                    let rx = rx.bind().unwrap();
+                    ready_cb();
+                    rx.run().unwrap();
+                }
+                Side::Tx => {
+                    let tx = udp::UdpTx::new(params.clone());
+                    let tx = tx.init().unwrap();
+                    ready_cb();
+                    tx.run().unwrap();
+                }
+            },
         }
     }
 
@@ -81,7 +78,7 @@ impl NetExp {
             NetExp::Tcp(params) => {
                 bytes.put_u8(0);
                 params
-            },
+            }
             NetExp::Udp(params) => {
                 bytes.put_u8(1);
                 params
@@ -94,7 +91,7 @@ impl NetExp {
                 for byte in ipv4addr.octets() {
                     bytes.put_u8(byte);
                 }
-            },
+            }
             IpAddr::V6(ipv6addr) => {
                 bytes.put_u8(1);
                 for byte in ipv6addr.octets() {
@@ -121,32 +118,32 @@ impl NetExp {
                 bytes.advance(12);
                 let host = bytes.get_u32();
                 IpAddr::V4(Ipv4Addr::from_bits(host))
-            },
+            }
             1 => {
                 let host = bytes.get_u128();
                 IpAddr::V6(Ipv6Addr::from_bits(host))
-            },
-            _ => {
-                return Err(error::Error::new("Invalid host"))
-            },
+            }
+            _ => return Err(error::Error::new("Invalid host")),
         };
         let port = bytes.get_u16();
         let side = match bytes.get_u8() {
             0 => Side::Rx,
             1 => Side::Tx,
-            _ => {
-                return Err(error::Error::new("Invalid side"))
-            },
+            _ => return Err(error::Error::new("Invalid side")),
         };
         let parallel = bytes.get_u16();
         let duration = bytes.get_u16();
         let params = NetExpParams {
-            host, port, side, parallel, duration
+            host,
+            port,
+            side,
+            parallel,
+            duration,
         };
         match variant {
             0 => Ok(NetExp::Tcp(params)),
             1 => Ok(NetExp::Udp(params)),
-            _ => Err(error::Error::new("Invalid NetExp"))
+            _ => Err(error::Error::new("Invalid NetExp")),
         }
     }
 }
@@ -162,13 +159,13 @@ mod test {
         let in_bytes: Bytes = vec![
             0, // TCP
             0, // IPv4
-            0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 127, 0, 0, 1, // host + padding
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 1, // host + padding
             0, 80, // port
-            0, // Rx
+            0,  // Rx
             0, 4, // parallel
             0, 30, // duration
-        ].into();
+        ]
+        .into();
         let expected = NetExp::Tcp(NetExpParams {
             host: IpAddr::V4(Ipv4Addr::from_str("127.0.0.1").unwrap()),
             port: 80,
@@ -187,13 +184,13 @@ mod test {
         let in_bytes: Bytes = vec![
             1, // UDP
             1, // IPv6
-            0, 1, 0, 2, 0, 3, 0, 4,
-            1, 0, 2, 0, 3, 0, 4, 0, // host + padding
+            0, 1, 0, 2, 0, 3, 0, 4, 1, 0, 2, 0, 3, 0, 4, 0, // host + padding
             1, 2, // port 258
             1, // Tx
             1, 4, // parallel
             0, 30, // duration
-        ].into();
+        ]
+        .into();
         let expected = NetExp::Udp(NetExpParams {
             host: IpAddr::V6(Ipv6Addr::from_str("1:2:3:4:100:200:300:400").unwrap()),
             port: 0x0102,
@@ -212,14 +209,14 @@ mod test {
     fn test_bad_deserialize_variant() {
         let in_bytes: Bytes = vec![
             200, // BAD!!!
-            0, // IPv4
-            0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 127, 0, 0, 1, // host + padding
+            0,   // IPv4
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 1, // host + padding
             0, 80, // port
-            0, // Rx
+            0,  // Rx
             0, 4, // parallel
             0, 30, // duration
-        ].into();
+        ]
+        .into();
         NetExp::deserialize(&in_bytes).expect("Failed to deserialize NetExp");
     }
 
@@ -227,15 +224,15 @@ mod test {
     #[should_panic]
     fn test_bad_deserialize_proto() {
         let in_bytes: Bytes = vec![
-            0, // TCP
+            0,  // TCP
             10, // BAD!!!
-            0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 127, 0, 0, 1, // host + padding
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 1, // host + padding
             0, 80, // port
-            0, // Rx
+            0,  // Rx
             0, 4, // parallel
             0, 30, // duration
-        ].into();
+        ]
+        .into();
         NetExp::deserialize(&in_bytes).expect("Failed to deserialize NetExp");
     }
 
@@ -245,13 +242,13 @@ mod test {
         let in_bytes: Bytes = vec![
             0, // TCP
             0, // IPv4
-            0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 127, 0, 0, // NOT ENOUGH BYTES
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 0, 0, // NOT ENOUGH BYTES
             0, 80, // port
-            0, // Rx
+            0,  // Rx
             0, 4, // parallel
             0, 30, // duration
-        ].into();
+        ]
+        .into();
         NetExp::deserialize(&in_bytes).expect("Failed to deserialize NetExp");
     }
 
@@ -261,13 +258,13 @@ mod test {
         let in_bytes: Bytes = vec![
             0, // TCP
             0, // IPv4
-            0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 127, 0, 0, 1, // host + padding
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 127, 0, 0, 1, // host + padding
             0, 80, // port
             10, // BAD!!!
             0, 4, // parallel
             0, 30, // duration
-        ].into();
+        ]
+        .into();
         NetExp::deserialize(&in_bytes).expect("Failed to deserialize NetExp");
     }
 }

@@ -1,5 +1,5 @@
-use std::net::IpAddr;
 use clap::{Parser, Subcommand};
+use std::net::IpAddr;
 
 use perfy::{client, server};
 
@@ -53,13 +53,27 @@ fn main() {
             server::run(config).unwrap_or_else(|e| {
                 eprintln!("{}", e.message);
             })
-        },
-        Commands::Client { host, port, udp, parallel, duration, reverse } => {
+        }
+        Commands::Client {
+            host,
+            port,
+            udp,
+            parallel,
+            duration,
+            reverse,
+        } => {
             let host: IpAddr = host.parse().expect("Invalid host");
-            let config = client::ClientConfig { host, port, udp, parallel, duration, reverse };
+            let config = client::ClientConfig {
+                host,
+                port,
+                udp,
+                parallel,
+                duration,
+                reverse,
+            };
             client::run(config).unwrap_or_else(|e| {
                 eprintln!("{}", e.message);
             })
-        },
+        }
     }
 }

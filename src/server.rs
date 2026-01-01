@@ -1,7 +1,7 @@
-use std::sync::mpsc;
+use std::io::{Read, Write};
 use std::net::IpAddr;
 use std::net::{TcpListener, TcpStream};
-use std::io::{Read, Write};
+use std::sync::mpsc;
 use std::thread;
 
 use crate::error;
@@ -15,7 +15,10 @@ pub struct ServerConfig {
 pub fn run(config: ServerConfig) -> error::Result<()> {
     loop {
         let Ok(listener) = TcpListener::bind(format!("{}:{}", config.host, config.port)) else {
-            return Err(error::Error::new(&format!("Failed binding to {}:{}", config.host, config.port)));
+            return Err(error::Error::new(&format!(
+                "Failed binding to {}:{}",
+                config.host, config.port
+            )));
         };
 
         println!("listening on {}:{}", config.host, config.port);
@@ -39,15 +42,17 @@ fn handle_client(mut stream: TcpStream) -> error::Result<()> {
     match &mut experiment {
         NetExp::Tcp(params) => {
             params.host = client_addr.ip();
-        },
+        }
         NetExp::Udp(params) => {
             params.host = client_addr.ip();
-        },
+        }
     };
 
     let (ready_tx, ready_rx) = mpsc::channel::<()>();
     let exp_thread = thread::spawn(move || {
-        experiment.run(|| { ready_tx.send(()).unwrap(); })
+        experiment.run(|| {
+            ready_tx.send(()).unwrap();
+        })
     });
     let Ok(_) = ready_rx.recv_timeout(std::time::Duration::new(5, 0)) else {
         return Err(error::Error::new("Timed out initializing test"));

@@ -1,14 +1,19 @@
-use std::{io::{Read, Write}, net};
+use std::io::{Read, Write};
+use std::net;
 
-use crate::error;
 use super::NetExpParams;
+use crate::error;
 
 /// Uninitialized
 pub struct Uninit {}
 /// Bound to port
-pub struct Bound { listener: net::TcpListener }
+pub struct Bound {
+    listener: net::TcpListener,
+}
 /// Ready
-pub struct Ready { stream: net::TcpStream }
+pub struct Ready {
+    stream: net::TcpStream,
+}
 
 pub struct TcpRx<State = Uninit> {
     params: NetExpParams,
@@ -27,14 +32,20 @@ impl TcpRx<Uninit> {
         let addr = format!("{}:{}", self.params.host, self.params.port);
         let listener = net::TcpListener::bind(addr.clone())?;
         println!("Started TcpRx listener on {}", addr);
-        Ok(TcpRx { params: self.params, state: Bound { listener } })
+        Ok(TcpRx {
+            params: self.params,
+            state: Bound { listener },
+        })
     }
 }
 
 impl TcpRx<Bound> {
     pub fn accept(self) -> error::Result<TcpRx<Ready>> {
         let (stream, _) = self.state.listener.accept()?;
-        Ok(TcpRx { params: self.params, state: Ready { stream } })
+        Ok(TcpRx {
+            params: self.params,
+            state: Ready { stream },
+        })
     }
 }
 
@@ -74,7 +85,10 @@ impl TcpTx<Uninit> {
         let addr = format!("{}:{}", self.params.host, self.params.port);
         println!("TcpTx connecting to {}", addr);
         let stream = net::TcpStream::connect(addr)?;
-        Ok(TcpTx { params: self.params, state: Ready { stream } })
+        Ok(TcpTx {
+            params: self.params,
+            state: Ready { stream },
+        })
     }
 }
 

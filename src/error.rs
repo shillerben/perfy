@@ -1,5 +1,5 @@
-use std::io;
 use std::fmt::{Debug, Display};
+use std::io;
 
 #[derive(Debug)]
 pub struct Error {
@@ -8,7 +8,9 @@ pub struct Error {
 
 impl Error {
     pub fn new(message: &str) -> Error {
-        Error { message: message.to_string() }
+        Error {
+            message: message.to_string(),
+        }
     }
 }
 

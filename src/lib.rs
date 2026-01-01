@@ -1,4 +1,4 @@
-pub mod server;
 pub mod client;
-pub mod netexp;
 pub mod error;
+pub mod netexp;
+pub mod server;
