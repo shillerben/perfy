@@ -1,6 +1,7 @@
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use std::net::IpAddr;
 
+use perfy::netexp;
 use perfy::{client, server};
 
 #[derive(Parser)]
@@ -22,26 +23,41 @@ enum Commands {
         port: u16,
     },
     /// run perfy client
-    Client {
-        /// server host to connect to
-        #[arg(short = 'c', long = "host")]
-        host: String,
-        /// server port to connect to
-        #[arg(short = 'p', long = "port")]
-        port: u16,
-        /// use UDP instead of TCP
-        #[arg(short = 'u', long = "udp", default_value_t = false)]
-        udp: bool,
-        /// number of parallel streams
-        #[arg(short = 'P', long = "parallel", default_value_t = 1)]
-        parallel: u16,
-        /// number of seconds to run for
-        #[arg(short = 't', long = "time", default_value_t = 10)]
-        duration: u16,
-        /// send data from server to client instead of client to server
-        #[arg(short = 'R', long = "reverse", default_value_t = false)]
-        reverse: bool,
-    },
+    Client(ClientArgs),
+}
+
+#[derive(Args)]
+struct ClientArgs {
+    #[command(subcommand)]
+    command: ClientCommands,
+}
+
+#[derive(Args)]
+struct CommonClientArgs {
+    /// server host to connect to
+    #[arg(short = 'c', long = "host")]
+    host: String,
+    /// server port to connect to
+    #[arg(short = 'p', long = "port")]
+    port: u16,
+    /// number of parallel streams
+    #[arg(short = 'P', long = "parallel", default_value_t = 1)]
+    parallel: u16,
+    /// number of seconds to run for
+    #[arg(short = 't', long = "time", default_value_t = 10)]
+    duration: u16,
+    /// send data from server to client instead of client to server
+    #[arg(short = 'R', long = "reverse", default_value_t = false)]
+    reverse: bool,
+}
+
+#[derive(Subcommand)]
+enum ClientCommands {
+    /// test using TCP
+    Tcp(CommonClientArgs),
+
+    /// test using UDP
+    Udp(CommonClientArgs),
 }
 
 fn main() {
@@ -54,26 +70,43 @@ fn main() {
                 eprintln!("{}", e.message);
             })
         }
-        Commands::Client {
-            host,
-            port,
-            udp,
-            parallel,
-            duration,
-            reverse,
-        } => {
-            let host: IpAddr = host.parse().expect("Invalid host");
-            let config = client::ClientConfig {
-                host,
-                port,
-                udp,
-                parallel,
-                duration,
-                reverse,
-            };
-            client::run(config).unwrap_or_else(|e| {
-                eprintln!("{}", e.message);
-            })
-        }
+        Commands::Client(client_args) => match client_args.command {
+            ClientCommands::Tcp(args) => {
+                let host: IpAddr = args.host.parse().expect("Invalid host");
+                let params = netexp::NetExpParams {
+                    host,
+                    port: args.port,
+                    side: if args.reverse {
+                        netexp::Side::Rx
+                    } else {
+                        netexp::Side::Tx
+                    },
+                    parallel: args.parallel,
+                    duration: args.duration,
+                };
+                let net_exp = netexp::NetExp::Tcp(params);
+                client::run(net_exp).unwrap_or_else(|e| {
+                    eprintln!("{}", e.message);
+                })
+            }
+            ClientCommands::Udp(args) => {
+                let host: IpAddr = args.host.parse().expect("Invalid host");
+                let params = netexp::NetExpParams {
+                    host,
+                    port: args.port,
+                    side: if args.reverse {
+                        netexp::Side::Rx
+                    } else {
+                        netexp::Side::Tx
+                    },
+                    parallel: args.parallel,
+                    duration: args.duration,
+                };
+                let net_exp = netexp::NetExp::Udp(params);
+                client::run(net_exp).unwrap_or_else(|e| {
+                    eprintln!("{}", e.message);
+                })
+            }
+        },
     }
 }
