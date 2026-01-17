@@ -1,7 +1,9 @@
 use std::io::{Read, Write};
 use std::net;
+use std::time;
 
 use super::NetExpParams;
+use super::{BUF_SIZE, MB, Stats};
 use crate::error;
 
 /// Uninitialized
@@ -50,8 +52,8 @@ impl TcpRx<Bound> {
 }
 
 impl TcpRx<Ready> {
-    pub fn run(mut self) -> error::Result<()> {
-        let mut buf: Vec<u8> = vec![0; 1024];
+    pub fn run(mut self) -> error::Result<Stats> {
+        let mut buf: Vec<u8> = vec![0; BUF_SIZE];
         let peer_addr = self.state.stream.peer_addr()?;
         println!(
             "Running TCP recv {}:{} for {} seconds with {} threads...",
@@ -61,10 +63,18 @@ impl TcpRx<Ready> {
             self.params.parallel,
         );
 
-        let n_bytes = self.state.stream.read(&mut buf)?;
-        println!("Received {n_bytes} bytes");
+        let start = time::Instant::now();
 
-        Ok(())
+        for i in 0..self.params.duration {
+            self.state.stream.read_exact(&mut buf)?;
+            println!("{i} Received {BUF_SIZE} bytes");
+        }
+
+        let total_bytes = BUF_SIZE * self.params.duration as usize;
+        let duration = time::Instant::now().duration_since(start).as_millis();
+        let bandwidth = total_bytes as u128 / duration;
+
+        Ok(Stats::new().with_bandwidth(bandwidth))
     }
 }
 
@@ -93,7 +103,8 @@ impl TcpTx<Uninit> {
 }
 
 impl TcpTx<Ready> {
-    pub fn run(mut self) -> error::Result<()> {
+    pub fn run(mut self) -> error::Result<Stats> {
+        let mut buf: Vec<u8> = vec![0; BUF_SIZE];
         let peer_addr = self.state.stream.peer_addr()?;
         println!(
             "Running TCP send {}:{} for {} seconds with {} threads...",
@@ -103,8 +114,17 @@ impl TcpTx<Ready> {
             self.params.parallel,
         );
 
-        self.state.stream.write_all("TESTING".as_bytes())?;
+        let start = time::Instant::now();
 
-        Ok(())
+        for i in 0..self.params.duration {
+            buf[0] = i as u8;
+            self.state.stream.write_all(&buf)?;
+        }
+
+        let total_bytes = BUF_SIZE * self.params.duration as usize;
+        let duration_ms = time::Instant::now().duration_since(start).as_millis();
+        let bandwidth = total_bytes as u128 / duration_ms;
+
+        Ok(Stats::new().with_bandwidth(bandwidth))
     }
 }

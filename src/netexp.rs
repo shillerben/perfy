@@ -2,9 +2,68 @@ mod tcp;
 mod udp;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::{
+    fmt::Display,
+    net::{IpAddr, Ipv4Addr, Ipv6Addr},
+};
 
 use crate::error;
+
+struct Stats {
+    /// Bandwidth in KB per second
+    bandwidth: Option<u128>,
+    // Packet loss as percentage
+    packet_loss: Option<f64>,
+}
+
+impl Stats {
+    fn new() -> Self {
+        Self {
+            bandwidth: None,
+            packet_loss: None,
+        }
+    }
+
+    fn with_bandwidth(self, bandwidth: u128) -> Self {
+        Self {
+            bandwidth: Some(bandwidth),
+            ..self
+        }
+    }
+
+    fn with_packet_loss(self, packet_loss: f64) -> Self {
+        Self {
+            packet_loss: Some(packet_loss),
+            ..self
+        }
+    }
+}
+
+impl Display for Stats {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(bw) = self.bandwidth {
+            // convert from bytes to bits
+            let bw = bw * 8;
+            let msg = match bw {
+                0..1_000 => format!("Bandwidth: {} kbps", bw),
+                1_000..1_000_000 => format!("Bandwidth: {} mbps", bw as f64 / 1_000f64),
+                _ => format!("Bandwidth: {} gbps", bw as f64 / 1_000_000f64),
+            };
+            f.write_str(&msg)?
+        }
+        if let Some(pl) = self.packet_loss {
+            f.write_str(&format!("Packet loss: {}%\n", pl))?
+        }
+
+        Ok(())
+    }
+}
+
+/// Megabytes (base 10)
+const MB: usize = 1_000_000;
+
+/// Size of data to send in bytes
+const BUF_SIZE: usize = 10 * MB;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct NetExpParams {
@@ -39,13 +98,19 @@ impl NetExp {
                     let rx = rx.bind().unwrap();
                     ready_cb();
                     let rx = rx.accept().unwrap();
-                    rx.run().unwrap();
+                    match rx.run() {
+                        Ok(stats) => println!("{stats}"),
+                        Err(e) => eprintln!("Error running TCP Rx: {}", e.message),
+                    }
                 }
                 Side::Tx => {
                     let tx = tcp::TcpTx::new(params.clone());
                     let tx = tx.init().unwrap();
                     ready_cb();
-                    tx.run().unwrap();
+                    match tx.run() {
+                        Ok(stats) => println!("{stats}"),
+                        Err(e) => eprintln!("Error running TCP Tx: {}", e.message),
+                    }
                 }
             },
             NetExp::Udp(params) => match params.side {
@@ -65,6 +130,10 @@ impl NetExp {
         }
     }
 
+    pub const fn serialized_size() -> usize {
+        25
+    }
+
     pub fn serialize(&self) -> Bytes {
         // 1 byte for NetExp variant
         // 1 byte for IpV4/IpV6
@@ -73,7 +142,7 @@ impl NetExp {
         // 1 byte for side
         // 2 bytes for parallel
         // 2 bytes for duration
-        let mut bytes = BytesMut::with_capacity(25);
+        let mut bytes = BytesMut::with_capacity(Self::serialized_size());
         let params = match self {
             NetExp::Tcp(params) => {
                 bytes.put_u8(0);

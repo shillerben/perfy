@@ -66,9 +66,7 @@ fn main() {
         Commands::Server { host, port } => {
             let host: IpAddr = host.parse().expect("Invalid host");
             let config = server::ServerConfig { host, port };
-            server::run(config).unwrap_or_else(|e| {
-                eprintln!("{}", e.message);
-            })
+            server::run(config).unwrap_or_else(|e| print_error_and_exit(&e.message))
         }
         Commands::Client(client_args) => match client_args.command {
             ClientCommands::Tcp(args) => {
@@ -85,9 +83,7 @@ fn main() {
                     duration: args.duration,
                 };
                 let net_exp = netexp::NetExp::Tcp(params);
-                client::run(net_exp).unwrap_or_else(|e| {
-                    eprintln!("{}", e.message);
-                })
+                client::run(net_exp).unwrap_or_else(|e| print_error_and_exit(&e.message))
             }
             ClientCommands::Udp(args) => {
                 let host: IpAddr = args.host.parse().expect("Invalid host");
@@ -103,10 +99,13 @@ fn main() {
                     duration: args.duration,
                 };
                 let net_exp = netexp::NetExp::Udp(params);
-                client::run(net_exp).unwrap_or_else(|e| {
-                    eprintln!("{}", e.message);
-                })
+                client::run(net_exp).unwrap_or_else(|e| print_error_and_exit(&e.message))
             }
         },
     }
+}
+
+fn print_error_and_exit(s: &str) -> ! {
+    eprintln!("{}", s);
+    std::process::exit(1);
 }

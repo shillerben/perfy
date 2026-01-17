@@ -12,6 +12,8 @@ pub struct ServerConfig {
     pub port: u16,
 }
 
+/// The Server receives NetExp from the Client, sets up the Rx side of the
+/// NetExp if necessary, then sends "OK" to the Client.
 pub fn run(config: ServerConfig) -> error::Result<()> {
     loop {
         let Ok(listener) = TcpListener::bind(format!("{}:{}", config.host, config.port)) else {
@@ -32,11 +34,12 @@ pub fn run(config: ServerConfig) -> error::Result<()> {
     }
 }
 
+/// Deserialize NetExp from Client and run NetExp
 fn handle_client(mut stream: TcpStream) -> error::Result<()> {
     let client_addr = stream.peer_addr()?;
     println!("Got a client! {}", client_addr);
-    let mut buf = vec![0; 1024];
-    stream.read_exact(&mut buf[..25])?;
+    let mut buf = [0; NetExp::serialized_size()];
+    stream.read_exact(&mut buf)?;
 
     let mut experiment = NetExp::deserialize(&buf)?;
     match &mut experiment {
